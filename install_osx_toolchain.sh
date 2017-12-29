@@ -1,26 +1,32 @@
 #!/bin/bash
 
-BINUTILS_VERSION=2.29
-GCC_VERSION=7.2.0
+# environment           description                                 default
+# variable
+# ------------------------------------------------------------------------------------
+# PREFIX                Directory where all the tools               /opt
+#                       would be installed
+# GCC_VERSION           GCC version that needs to be installed      7.2.0
+# BINUTILS_VERSION      BINUTILS version that needs to be installed 2.29
+# TARGET                Target architecture for which all the       x86_64-pc-elf
+#                       tools would be build and installed
+
+BINUTILS_VERSION=${BINUTILS_VERSION:="2.29"}
+GCC_VERSION=${GCC_VERSION:="7.2.0"}
 
 # check if brew is installed
 command -v brew > /dev/null 2>&1 || { echo >&2 "It seems like brew is not installed on your machine! Head on over to http://brew.sh/ to install it."; exit 1; }
 
-export PREFIX="/opt"
-export TARGET=x86_64-pc-elf
+PREFIX=${PREFIX:="/opt"}
+TARGET=${TARGET:="x86_64-pc-elf"}
+export PATH="$PREFIX/bin:$PATH"
 
 # gmp mpfr libmpc
 brew install gmp mpfr libmpc autoconf automake nasm xorriso qemu
 
 TEMPDIR=$(mktemp -d)
-cd $TEMPDIR
 
-BINUTILS_TOOLS="addr2line ar as c++filt elfedit gprof ld ld.bfd nm objcopy objdump ranlib readelf size strings strip"
-
-BINUTILS_TOOLS_ARRAY=($BINUTILS_TOOLS)
-
-# install binutils
-if [ ! -d "binutils-${BINUTILS_VERSION}" ]; then
+install_binutils () {
+    cd $TEMPDIR
     echo ""
     echo "Installing \`binutils\`"
     echo ""
@@ -32,12 +38,10 @@ if [ ! -d "binutils-${BINUTILS_VERSION}" ]; then
     ../binutils-${BINUTILS_VERSION}/configure --target=$TARGET --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror
     make
     sudo make install
-fi
+}
 
-cd $TEMPDIR
-
-# install gcc
-if [ ! -d "gcc-${GCC_VERSION}" ]; then
+install_gcc () {
+    cd $TEMPDIR
     echo ""
     echo "Installing \`gcc-${GCC_VERSION}\`"
     echo ""
@@ -51,12 +55,10 @@ if [ ! -d "gcc-${GCC_VERSION}" ]; then
     make all-target-libgcc
     sudo make install-gcc
     sudo make install-target-libgcc
-fi
+}
 
-cd $TEMPDIR
-
-# install objconv
-if [ ! -d "objconv"  ]; then
+install_objconv () {
+    cd $TEMPDIR
     echo ""
     echo "Installing \`objconv\`"
     echo ""
@@ -67,12 +69,10 @@ if [ ! -d "objconv"  ]; then
     unzip source.zip -d src
     g++ -o objconv -O2 src/*.cpp --prefix="$PREFIX"
     sudo cp objconv "$PREFIX/bin"
-fi
+}
 
-cd $TEMPDIR
-
-# install grub
-if [ ! -d "grub"  ]; then
+install_grub () {
+    cd $TEMPDIR
     echo ""
     echo "Installing \`grub\`"
     echo ""
@@ -85,4 +85,30 @@ if [ ! -d "grub"  ]; then
         TARGET_STRIP=$TARGET-strip TARGET_NM=$TARGET-nm TARGET_RANLIB=$TARGET-ranlib --target=$TARGET --prefix="$PREFIX"
     make
     sudo make install
+}
+
+BINUTILS_TOOLS=( addr2line ar as c++filt elfedit gprof ld ld.bfd nm objcopy objdump ranlib readelf size strings strip )
+
+# install binutils
+for i in "${BINUTILS_TOOLS[@]}"
+do
+    if ! [ -x "$(command -v ${TARGET}-${i})" ]; then
+        install_binutils
+        break
+    fi
+done
+
+# install gcc
+if ! [ -x "$(command -v ${TARGET}-gcc)" ]; then
+    install_gcc
+fi
+
+# install objconv
+if ! [ -x "$(command -v objconv)" ]; then
+    install_objconv
+fi
+
+# install grub
+if ! [ -x "$(command -v grub-mkrescue)" ]; then
+    install_grub
 fi
